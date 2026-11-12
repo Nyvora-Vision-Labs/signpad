@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SignPad</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+  <header>
+    <h1>SignPad</h1>
+    <span class="tag" id="phaseTag">connecting</span>
+  </header>
+
+  <!-- waiting / info -->
+  <section class="card" id="waitView">
+    <div class="spinner" id="spinner"></div>
+    <p id="waitMsg">Connecting to the agent…</p>
+  </section>
+
+  <!-- signature capture -->
+  <section class="card" id="signView" hidden>
+    <p class="ask"><b>The agent is asking you to sign</b> as <b id="signer"></b>.</p>
+    <p class="purpose" id="purpose"></p>
+    <p class="sub">Press <b>Start</b>, move the pointer into the box during the 3-second countdown,
+      then just move the mouse or slide on the trackpad to write. No clicking needed.
+      <b>Space</b> lifts or lowers the pen, and a <b>click</b>, <b>Enter</b> or <b>Esc</b> finishes.
+      Click-and-drag drawing works too.</p>
+    <div class="pad-wrap" id="wrap">
+      <canvas id="pad"></canvas>
+      <div class="x">×</div><div class="baseline"></div>
+      <div class="hint" id="hint">Sign here</div>
+      <div class="count" id="count" hidden></div>
+      <div class="live" id="live" hidden></div>
+      <div class="pen" id="pen" hidden></div>
+    </div>
+    <div class="row">
+      <button class="primary" id="start">Start</button>
+      <span class="muted">Ink</span>
+      <button class="swatch on" data-c="#0b2a8a" style="background:#0b2a8a" title="Blue" aria-label="Blue ink"></button>
+      <button class="swatch" data-c="#111111" style="background:#111" title="Black" aria-label="Black ink"></button>
+      <label>Pen <input type="range" id="width" min="1.5" max="6" step="0.5" value="3"></label>
+      <span class="spacer"></span>
+      <button id="undo">Undo</button>
+      <button id="clear">Clear</button>
+    </div>
+    <div class="row">
+      <button class="primary" id="useSig" disabled>Use this signature</button>
+      <button id="decline">Decline</button>
+    </div>
+  </section>
+
+  <!-- review -->
+  <section class="card" id="reviewView" hidden>
+    <p class="ask"><b>Please check the signed document.</b></p>
+    <pre class="summary" id="summary"></pre>
+    <ul class="files" id="files"></ul>
+    <iframe id="preview" title="Signed document preview" hidden></iframe>
+    <p class="muted" id="noPreview" hidden>No PDF preview is available for this file. Open the saved file to check it.</p>
+    <label class="block">Anything to change? (optional)
+      <textarea id="comment" rows="2" placeholder="e.g. the signature should go in the author box, not the witness box"></textarea>
+    </label>
+    <div class="row">
+      <button class="primary" id="approve">Looks right</button>
+      <button id="reject">Needs changes</button>
+    </div>
+  </section>
+
+  <p id="status" class="status"></p>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>
