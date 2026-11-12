@@ -53,3 +53,35 @@ def test_errors_come_back_as_tool_errors(server, sample_docx):
     call(server, "open_document", path=str(sample_docx))
     with pytest.raises(ToolError, match="request_signature"):
         call(server, "place_signature", slot_id="S1", signature_id="sig9")
+
+
+def test_waiting_tools_send_heartbeats(sample_pdf, fake_pad, tmp_path, monkeypatch):
+    """A person may take a while in the pad; the client must keep hearing from the tool."""
+    import time
+
+    from mcp import Client
+
+    import signpad.mcp_server as ms
+
+    monkeypatch.setattr(ms, "HEARTBEAT_SECONDS", 0.05)
+    slow = fake_pad.request_signature
+    fake_pad.request_signature = lambda signer, purpose: (time.sleep(0.4), slow(signer, purpose))[1]
+    server = build_server(SigningState(lambda: fake_pad))
+    beats = []
+
+    async def on_progress(progress, total, message):
+        beats.append((progress, message))
+
+    async def go():
+        async with Client(server) as client:
+            tools = {t.name: t for t in (await client.list_tools()).tools}
+            assert "ctx" not in tools["request_signature"].input_schema.get("properties", {})
+            await client.call_tool("open_document", {"path": str(sample_pdf), "output": str(tmp_path / "o.pdf")})
+            res = await client.call_tool("request_signature", {"signer_name": "Alex", "purpose": "x"},
+                                         progress_callback=on_progress)
+            return res.content[0].text
+
+    assert "sig1" in anyio.run(go)
+    assert len(beats) >= 3
+    assert [b[0] for b in beats] == sorted(b[0] for b in beats)
+    assert "signing pad" in beats[0][1]

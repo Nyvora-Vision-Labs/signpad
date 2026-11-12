@@ -21,6 +21,11 @@ import threading
 from collections.abc import Callable
 from pathlib import Path
 
+import anyio
+import anyio.to_thread
+from mcp.server.mcpserver import Context, MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
+
 from .agent.session import Pad, Session
 from .documents import DocumentError
 
@@ -32,6 +37,12 @@ text, initials, or anything else, and never reuse a signature for a different si
 only what signing needs (signature slots, the signing date, fields the request asks for), leave \
 boxes meant for other parties alone, ask the person in chat when the choice is genuinely theirs, \
 and finish with save_and_review. The original file is never overwritten."""
+
+
+# While request_signature or save_and_review waits for the person, send a progress update this
+# often. MCP clients such as Claude Code abort a tool that goes silent for too long (30 minutes by
+# default), and a person may leave the pad open for a while before drawing or approving.
+HEARTBEAT_SECONDS = 15.0
 
 
 class NoDocument(DocumentError):
@@ -82,9 +93,6 @@ def _browser_pad() -> Pad:
 
 
 def build_server(state: SigningState | None = None):
-    from mcp.server.mcpserver import MCPServer
-    from mcp.server.mcpserver.exceptions import ToolError
-
     state = state or SigningState()
     mcp = MCPServer("signpad", instructions=INSTRUCTIONS)
 
@@ -97,6 +105,32 @@ def build_server(state: SigningState | None = None):
                 except DocumentError as e:
                     raise ToolError(str(e)) from e
         return mcp.tool()(wrapper)
+
+    async def waiting_for_person(ctx: Context, message: str, fn, *args):
+        """Run a call that blocks until the person acts in the pad, sending a progress update
+        every HEARTBEAT_SECONDS so the client knows the tool is alive and does not time it out."""
+        def locked():
+            with state.lock:
+                return fn(*args)
+
+        async def heartbeat():
+            beats = 0
+            while True:
+                await anyio.sleep(HEARTBEAT_SECONDS)
+                beats += 1
+                try:
+                    await ctx.report_progress(beats, None, message)
+                except Exception:  # noqa: BLE001 - a missed heartbeat must never fail the signing
+                    pass
+
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(heartbeat)
+            try:
+                return await anyio.to_thread.run_sync(locked)
+            except DocumentError as e:
+                raise ToolError(str(e)) from e
+            finally:
+                tg.cancel_scope.cancel()
 
     @tool
     def open_document(path: str, output: str | None = None) -> str:
@@ -120,8 +154,8 @@ def build_server(state: SigningState | None = None):
         also read the file itself to see the page layout."""
         return state.require().inspect()
 
-    @tool
-    def request_signature(signer_name: str, purpose: str) -> str:
+    @mcp.tool()
+    async def request_signature(signer_name: str, purpose: str, ctx: Context) -> str:
         """Ask the person to draw their handwritten signature in the signing pad, and wait until
         they do (this can take a minute). Tell them in chat to switch to the browser tab before
         calling it. This is the only way to obtain a signature. Returns a signature id, or says
@@ -131,7 +165,9 @@ def build_server(state: SigningState | None = None):
             signer_name: Name of the person signing, as it appears in the document.
             purpose: One or two sentences shown in the pad: what they are signing and where it goes.
         """
-        return state.require().request_signature(signer_name, purpose)
+        return await waiting_for_person(
+            ctx, "Waiting for the person to draw their signature in the signing pad.",
+            lambda: state.require().request_signature(signer_name, purpose))
 
     @tool
     def place_signature(slot_id: str, signature_id: str, height_pt: float = 36) -> str:
@@ -176,8 +212,8 @@ def build_server(state: SigningState | None = None):
         """
         return state.require().clear_slot(slot_id)
 
-    @tool
-    def save_and_review(summary: str) -> str:
+    @mcp.tool()
+    async def save_and_review(summary: str, ctx: Context) -> str:
         """Save the signed copy (never over the original), make a PDF copy of Word files when a
         converter is available, and show the result to the person for approval in the signing pad,
         waiting for their answer. Returns the saved paths, whether they approved, and their comment.
@@ -186,7 +222,9 @@ def build_server(state: SigningState | None = None):
         Args:
             summary: Plain-language list of every change you made, for the person to check.
         """
-        return state.require().save_and_review(summary)
+        return await waiting_for_person(
+            ctx, "Waiting for the person to approve the signed copy in the signing pad.",
+            lambda: state.require().save_and_review(summary))
 
     return mcp
 

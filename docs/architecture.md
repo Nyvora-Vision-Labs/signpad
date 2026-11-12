@@ -79,7 +79,7 @@ The page (`static/app.js`) supports click-and-drag drawing and "hover" drawing (
 
 - `open_document(path, output?)` picks the file; one server process can sign several documents in turn. `SigningState` holds one pad for the process lifetime and one open `Session`.
 - There is no `ask_user` tool: the client asks the person in its own chat. (`Session.ask_user` reads stdin, which is the MCP pipe here.)
-- Tool calls are serialized with a lock. `request_signature` and `save_and_review` block in a worker thread until the person acts in the pad.
+- Tool calls are serialized with a lock. `request_signature` and `save_and_review` block in a worker thread until the person acts in the pad. While they wait, they send an MCP progress notification every 15 seconds (`HEARTBEAT_SECONDS`), because clients such as Claude Code abort a tool that stays silent too long (30 minutes by default) and a person may leave the pad open for a while. `.mcp.json` also sets a 24-hour per-server `timeout` as a backstop.
 - No tool accepts an image, so a signature can only come from the pad.
 - Nothing may write to stdout except the protocol.
 

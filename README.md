@@ -64,7 +64,7 @@ From this repo, start `claude`, approve the `signpad` server when it asks (it is
 /sign ~/Downloads/form.pdf "Alex Example" ~/Downloads/editor_email.txt
 ```
 
-Or just ask in plain words: "sign ~/Downloads/form.docx for me". Claude Code reads the document, asks you in chat when a choice is yours, opens the pad in your browser for you to draw your signature, places it, and shows you the result to approve.
+Or just ask in plain words: "sign ~/Downloads/form.docx for me". Claude Code reads the document, asks you in chat when a choice is yours, opens the pad in your browser for you to draw your signature, places it, and shows you the result to approve. There's no rush in the pad: while it waits for you, SignPad keeps Claude Code updated so the request doesn't time out.
 
 To use it from any directory, register the server once for your user, with the full path to this repo's venv:
 
