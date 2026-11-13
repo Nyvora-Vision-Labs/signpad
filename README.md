@@ -4,6 +4,10 @@
 
 Someone sends you a form and says "please sign and return it". SignPad's agent reads the document (and the request, if you give it), works out where your signature belongs, opens a signing pad in your browser where you draw your signature with the trackpad or mouse, places it, fixes the date if needed, and shows you the result to approve. The original file is never changed.
 
+[![SignPad demo: the agent finds where you sign, then you draw your signature in the pad](docs/media/signpad-demo-poster.jpg)](docs/media/signpad-demo.mp4)
+
+*40-second demo, click to play.*
+
 ```
 signpad agent "Licence Agreement.docx" --request editor_email.txt
 ```
